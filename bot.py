@@ -9,7 +9,7 @@ from aiogram.types import Message
 from config import cfg
 import cache
 import ratelimit
-import plugins  # noqa: F401 — регистрация плагинов при импорте
+import plugins  # noqa: F401
 from registry import REGISTRY, for_kind
 
 logging.basicConfig(
@@ -21,53 +21,22 @@ log = logging.getLogger("bot")
 bot = Bot(cfg.bot_token)
 dp = Dispatcher()
 
-# ---------- определение типа входа ----------
-
 def detect_kind(q: str) -> str | None:
     q = q.strip()
-    # координаты "lat,lon"
     m = re.fullmatch(r"(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)", q)
-    if m:
-        return "coords"
-    # BTC
-    if re.fullmatch(r"(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}", q):
-        return "btc"
-    # VIN (17 символов, без I/O/Q)
-    if re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", q.upper()):
-        return "vin"
-    # хэш md5/sha1/sha256
-    if re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", q):
-        return "hash"
-    # IP
-    if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", q):
-        return "ip"
-    # email
-    if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", q):
-        return "email"
-    # @username
-    if q.startswith("@"):
-        return "username"
-    # домен
-    if re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}", q.lower()) and " " not in q:
-        return "domain"
-    # ФИО (2–4 слова с заглавной)
-    if re.fullmatch(r"(?:[А-ЯЁA-Z][а-яёa-z-]+\s+){1,3}[А-ЯЁA-Z][а-яёa-z-]+", q):
-        return "name"
-    # госномер РФ
-    if re.fullmatch(
-        r"[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}",
-        re.sub(r"[\s-]", "", q.upper()),
-    ):
-        return "plate"
-    # телефон
-    if re.fullmatch(r"\+?\d{10,15}", re.sub(r"[^\d+]", "", q)):
-        return "phone"
-    # ник
-    if re.fullmatch(r"[A-Za-zА-Яа-я0-9_.-]{2,64}", q):
-        return "nick"
+    if m: return "coords"
+    if re.fullmatch(r"(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}", q): return "btc"
+    if re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", q.upper()): return "vin"
+    if re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", q): return "hash"
+    if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", q): return "ip"
+    if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", q): return "email"
+    if q.startswith("@"): return "username"
+    if re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}", q.lower()) and " " not in q: return "domain"
+    if re.fullmatch(r"(?:[А-ЯЁA-Z][а-яёa-z-]+\s+){1,3}[А-ЯЁA-Z][а-яёa-z-]+", q): return "name"
+    if re.fullmatch(r"[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}", re.sub(r"[\s-]", "", q.upper())): return "plate"
+    if re.fullmatch(r"\+?\d{10,15}", re.sub(r"[^\d+]", "", q)): return "phone"
+    if re.fullmatch(r"[A-Za-zА-Яа-я0-9_.-]{2,64}", q): return "nick"
     return None
-
-# ---------- извлечение связанных сущностей ----------
 
 RE_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 RE_IP = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
@@ -92,8 +61,6 @@ def format_artifacts(acc: dict[str, set[str]], exclude: str | None = None) -> st
         if items:
             lines.append(f"  {kind}: {', '.join(items[:15])}")
     return "\n".join(lines) if len(lines) > 1 else ""
-
-# ---------- Telegram handlers ----------
 
 @dp.message(CommandStart())
 async def cmd_start(m: Message):
@@ -146,6 +113,11 @@ async def handle(m: Message):
 
         if not isinstance(result, str):
             result = str(result)
+        
+        # Пропускаем плагины, у которых нет ключей API
+        if "ключ не задан" in result or "API-ключ не задан" in result:
+            continue
+            
         if len(result) > 3500:
             result = result[:3500] + "\n…(обрезано)"
 
@@ -158,8 +130,6 @@ async def handle(m: Message):
         if len(summary) > 3500:
             summary = summary[:3500] + "\n…(обрезано)"
         await m.answer(summary)
-
-# ---------- запуск ----------
 
 async def main():
     if not cfg.bot_token:
